@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../providers/server_provider.dart';
+import '../../domain/entities/server_status.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -13,6 +14,8 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   static const int _defaultPort = 8080;
   bool _isStarting = false;
+  bool _showCopySuccess = false;
+  DateTime? _lastHandledCopyAt;
 
   @override
   void initState() {
@@ -43,6 +46,25 @@ class _HomePageState extends State<HomePage> {
     await provider.stopServer();
   }
 
+  void _handleCopyAnimation(ServerStatus status) {
+    if (status.lastCopiedAt == null) return;
+    if (_lastHandledCopyAt == status.lastCopiedAt) return;
+
+    _lastHandledCopyAt = status.lastCopiedAt;
+
+    setState(() {
+      _showCopySuccess = true;
+    });
+
+    Future.delayed(const Duration(seconds: 3), () {
+      if (!mounted) return;
+      if (_lastHandledCopyAt != status.lastCopiedAt) return;
+      setState(() {
+        _showCopySuccess = false;
+      });
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -64,6 +86,13 @@ class _HomePageState extends State<HomePage> {
             builder: (context, provider, child) {
               final status = provider.status;
               final errorMessage = provider.errorMessage;
+
+              if (status.lastCopiedAt != null && status.lastCopiedAt != _lastHandledCopyAt) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted) return;
+                  _handleCopyAnimation(status);
+                });
+              }
 
               if (_isStarting) {
                 return const Center(
@@ -178,126 +207,89 @@ class _HomePageState extends State<HomePage> {
 
               return SingleChildScrollView(
                 padding: const EdgeInsets.all(16), // внутренние отступы
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  mainAxisAlignment: MainAxisAlignment.center,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.start,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                         Text(
-                            '📺 Clip2TV',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        const SizedBox(height: 10),
-                        const Text(
-                          'Сервер запущен',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-
-
-                        Container(
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.2),
-                                blurRadius: 20,
-                                offset: const Offset(0, 10),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              if (status.url != null)
-                                QrImageView(
-                                  data: status.url!,
-                                  version: QrVersions.auto,
-                                  size: 250.0,
-                                  backgroundColor: Colors.white,
-                                ),
-                              const SizedBox(height: 24),
-                              Column(
-                                children: [
-                                  if (status.url != null)
-                                    SelectableText(
-                                      status.url!,
-                                      style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w500,
-                                        color: Color(0xFF667eea),
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  const SizedBox(height: 16),
-                                  if (status.ipAddress != null)
-                                    Text(
-                                      'IP: ${status.ipAddress}',
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                  if (status.port != null)
-                                    Text(
-                                      'Порт: ${status.port}',
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                ],
-                              )
-                            ],
-                          ),
-                        ),
-                      ],
+                    Text(
+                      '📺 Clip2TV',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                    SizedBox(width: 50,),
-                    Column(
-                      children: [
-                        const SizedBox(height: 50),
-                        const Text(
-                          'Отсканируйте QR-код с телефона',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 20,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 10),
-                        Focus(
-                          autofocus: true,
-                          child: ElevatedButton(
-                            onPressed: _stopServer,
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 48,
-                                vertical: 20,
-                              ),
-                              backgroundColor: Colors.red,
-                              foregroundColor: Colors.white,
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Сервер запущен',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Карточка с QR должна быть по центру, в отличие от заголовка слева.
+                    Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: _showCopySuccess ? Colors.green : Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              blurRadius: 20,
+                              offset: const Offset(0, 10),
                             ),
-                            child: const Text(
-                              'Остановить сервер',
-                              style: TextStyle(fontSize: 18),
-                            ),
-                          ),
+                          ],
                         ),
-                      ],
-                    )
+                        child: Column(
+                          children: [
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 400),
+                              transitionBuilder: (child, animation) {
+                                return ScaleTransition(
+                                  scale: animation,
+                                  child: child,
+                                );
+                              },
+                              child: _showCopySuccess
+                                  ? const Icon(
+                                      Icons.check_circle,
+                                      key: ValueKey('success'),
+                                      color: Colors.white,
+                                      size: 160,
+                                    )
+                                  : (status.url != null
+                                      ? QrImageView(
+                                          key: const ValueKey('qr'),
+                                          data: status.url!,
+                                          version: QrVersions.auto,
+                                          size: 250.0,
+                                          backgroundColor: Colors.white,
+                                        )
+                                      : const SizedBox.shrink()),
+                            ),
+                            const SizedBox(height: 1),
+                            Column(
+                              children: [
+                                if (status.url != null)
+                                  SelectableText(
+                                    status.url!,
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w500,
+                                      color: Color(0xFF667eea),
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                              ],
+                            )
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               );

@@ -66,18 +66,27 @@ class ServerRepositoryImpl implements ServerRepository {
     String? ipAddress,
     int? port,
     String? url,
+  DateTime? lastCopiedAt,
   }) {
     _currentStatus = _currentStatus.copyWith(
       isRunning: isRunning,
       ipAddress: ipAddress,
       port: port,
       url: url,
+      lastCopiedAt: lastCopiedAt,
     );
     _statusController.add(_currentStatus);
   }
 
   Future<void> _handleTextReceived(String text) async {
     await copyToClipboard(text);
+    _updateStatus(
+      isRunning: _currentStatus.isRunning,
+      ipAddress: _currentStatus.ipAddress,
+      port: _currentStatus.port,
+      url: _currentStatus.url,
+      lastCopiedAt: DateTime.now(),
+    );
   }
 
   void dispose() {
